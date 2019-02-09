@@ -1,7 +1,10 @@
+#include <math.h>
 #include "kalman_filter.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
+
+const float DoublePI = 2 * M_PI;
 
 KalmanFilter::KalmanFilter() {}
 
@@ -19,72 +22,89 @@ void KalmanFilter::Init(VectorXd &x_in, MatrixXd &P_in, MatrixXd &F_in,
 
 void KalmanFilter::Predict() {
   /**
-  DONE:
+  TODO:
     * predict the state
   */
   x_ = F_ * x_;
-  P_ = F_ * P_ * F_.transpose() + Q_;
+  MatrixXd Ft = F_.transpose();
+  P_ = F_ * P_ * Ft + Q_;
 }
 
 void KalmanFilter::Update(const VectorXd &z) {
   /**
-  DONE:
+  TODO:
     * update the state by using Kalman Filter equations
   */
+
+  VectorXd z_pred = H_ * x_;
+
+  VectorXd y = z - z_pred;
   MatrixXd Ht = H_.transpose();
+  MatrixXd PHt = P_ * Ht;
+  MatrixXd S = H_ * PHt + R_;
+  MatrixXd Si = S.inverse();
+  MatrixXd K = PHt * Si;
 
-  VectorXd y = z - (H_ * x_);
-  MatrixXd S = H_ * P_ * Ht + R_;
-  MatrixXd K = P_ * Ht * S.inverse();
-
+  //new estimate
   x_ = x_ + (K * y);
   long x_size = x_.size();
   MatrixXd I = MatrixXd::Identity(x_size, x_size);
   P_ = (I - K * H_) * P_;
+
+}
+
+VectorXd RadarCartesianToPolar(const VectorXd &x_state){
+  /*
+   * convert radar measurements from cartesian coordinates (x, y, vx, vy) to
+   * polar (rho, phi, rho_dot) coordinates
+  */
+  float px, py, vx, vy;
+  px = x_state[0];
+  py = x_state[1];
+  vx = x_state[2];
+  vy = x_state[3];
+
+  float rho, phi, rho_dot;
+  rho = sqrt(px*px + py*py);
+  phi = atan2(py, px);  // returns values between -pi and pi
+
+  // if rho is very small, set it to 0.0001 to avoid division by 0 in computing rho_dot
+  if(rho < 0.000001)
+    rho = 0.000001;
+
+  rho_dot = (px * vx + py * vy) / rho;
+
+  VectorXd z_pred = VectorXd(3);
+  z_pred << rho, phi, rho_dot;
+
+  return z_pred;
+
 }
 
 void KalmanFilter::UpdateEKF(const VectorXd &z) {
   /**
-  DONE:
+  TODO:
     * update the state by using Extended Kalman Filter equations
   */
 
-  // Define local variables to work on
-  float px = x_[0];
-  float py = x_[1];
-  float vx = x_[2];
-  float vy = x_[3];
-  // Define Radar variables
-  float rho = sqrt(pow(px,2)+pow(py,2));
-  float phi = atan2(py,px); // The use of atan2 return values between -pi and pi instead of -pi/2 and pi/2 for atan
-  float rhodot;
-
-  //Avoid Division by 0
-  if (fabs(rho) < 0.0001) {
-    rhodot = 0;
-  } else {
-    rhodot = (vx*px + vy*py)/rho;
-  }
-
-  // Create a function that contains our predictions
-  VectorXd z_pred (3);
-  z_pred << rho, phi, rhodot;
-
-  // y is the error vector (actual values - estimations)
+  // convert radar measurements from cartesian coordinates (x, y, vx, vy) to polar (rho, phi, rho_dot).
+  VectorXd z_pred = RadarCartesianToPolar(x_);
   VectorXd y = z - z_pred;
 
-  //Normalizing the angles so y[1] always stays between -Pi and +Pi
-  while (y[1] > M_PI){
-     y[1] -= (2 * M_PI);
-  }
-  while (y[1] < - M_PI){
-     y[1] += (2 * M_PI);
+  // normalize the angle between -pi to pi
+  while(y(1) > M_PI){
+    y(1) -= DoublePI;
   }
 
+  while(y(1) < -M_PI){
+    y(1) += DoublePI;
+  }
+
+  // following is exact the same as in the function of KalmanFilter::Update()
   MatrixXd Ht = H_.transpose();
-  MatrixXd S = H_ * P_ * Ht + R_;
-  MatrixXd Si = S.inverse();
   MatrixXd PHt = P_ * Ht;
+  MatrixXd S = H_ * PHt + R_;
+  MatrixXd Si = S.inverse();
   MatrixXd K = PHt * Si;
 
   //new estimate
