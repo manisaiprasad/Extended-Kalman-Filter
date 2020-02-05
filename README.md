@@ -24,7 +24,7 @@ The program main.cpp has already been filled out, but feel free to modify it.
 Here is the main protocol that main.cpp uses for uWebSocketIO in communicating with the simulator.
 
 
-INPUT: values provided by the simulator to the c++ program
+# INPUT: values provided by the simulator to the c++ program
 
 ["sensor_measurement"] => the measurement that the simulator observed (either lidar or radar)
 
